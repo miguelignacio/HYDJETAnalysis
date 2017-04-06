@@ -6,10 +6,11 @@ import numpy as np
 from AtlasCommonUtils import *
 
 
-from iminuit import Minuit
+from iminuit import Minuit, describe, Struct
 import matplotlib.pyplot as plt
 from math import cos
-
+from math import sin
+from math import pi
 
 
 def SubtractPedestal(h):
@@ -114,12 +115,14 @@ for key_signal in llaves_signal:
             histo["dphi_deta"][key_signal][key_eta][key_plane]   = Sparse.Projection(axis_dphi, axis_deta)
             histo["phi_trigger"][key_signal][key_eta][key_plane] = Sparse.Projection(axis_phitrigger)
             histo["dphi"][key_signal][key_eta][key_plane]        = Sparse.Projection(axis_dphi)
-            histo["dphi"][key_signal][key_eta][key_plane].Scale(1.0/nTriggers[key_plane])
+            #histo["dphi"][key_signal][key_eta][key_plane].Scale(1.0/nTriggers[key_plane])
 
             histo["deta"][key_signal][key_eta][key_plane]        = Sparse.Projection(axis_deta)
             histo["signal"][key_signal][key_eta][key_plane]      = Sparse.Projection(axis_signal)
             histo["pT_assoc"][key_signal][key_eta][key_plane]    = Sparse.Projection(axis_pTassoc)
             histo["pT_trig"][key_signal][key_eta][key_plane]    =  Sparse.Projection(axis_pTtrig)
+
+            histo["dphi"][key_signal][key_eta][key_plane].Sumw2()
             
 
 
@@ -243,7 +246,7 @@ def FromTH1toArray(histo):
 
 from math import cos
 
-print ' COS ' , cos(0)
+print ' COS ' , cos(0), pi
 
 from scipy.optimize import curve_fit
 
@@ -255,22 +258,31 @@ data["Inplane"]   = FromTH1toArray(histo["dphi"]["Bkg"]["LargeEta"]["Inplane"])
 data["Midplane"]  = FromTH1toArray(histo["dphi"]["Bkg"]["LargeEta"]["Midplane"])
 data["Outplane"]  = FromTH1toArray(histo["dphi"]["Bkg"]["LargeEta"]["Outplane"])
 
-def func(x, B, v2_trig, v2_assoc, V3, v4_trig, v4_assoc, phi_s, c):
+def func(x, params, phi , c ):
 
-    num = v2_trig + np.cos(2*phi_s)*np.sin(2*c)/(2*c) +  v4_trig*np.cos(2*phi_s)*np.sin(2*c)/(2*c) +  v2_trig*np.cos(4*phi_s)*np.sin(4*c)/(4*c) +   v4_trig*np.cos(6*phi_s)*np.sin(6*c)/(6*c)
+    B = params["B"]
+    v2_t = params["v2_t"]
+    v2_a = params["v2_a"]
+    V3   = params["V3"]
+    v4_t = params["v4_t"]
+    v4_a = params["v4_a"]
+    #phi  = params["phi"]
+    #c    = params["c"]
 
-    den =  1 + 2*v2_trig*np.cos(2*phi_s)*np.sin(2*c)/(2*c) + 2*v4_trig*np.cos(4*phi_s)*np.sin(4*c)/(2*c) 
+    num = v2_t + cos(2*phi)*sin(2*c)/(2*c) +  v4_t*cos(2*phi)*sin(2*c)/(2*c) +  v2_t*cos(4*phi)*sin(4*c)/(4*c) + v4_t*cos(6*phi)*sin(6*c)/(6*c)
+
+    den =  1 + 2*v2_t*cos(2*phi)*sin(2*c)/(2*c) + 2*v4_t*cos(4*phi)*sin(4*c)/(4*c) 
     v2R = num/den
 	
-    num2 = v4_trig +  np.cos(4*phi_s)*np.sin(4*c)/(4*c) +    v2_trig*np.cos(2*phi_s)*np.sin(2*c)/(2*c) +   v2_trig*np.cos(6*phi_s)*np.sin(6*c)/(6*c) +  v4_trig*np.cos(8*phi_s)*np.sin(8*c)/(8*c) 
+    num2 = v4_t + cos(4*phi)*sin(4*c)/(4*c) + v2_t*cos(2*phi)*sin(2*c)/(2*c)+ v2_t*cos(6*phi)*sin(6*c)/(6*c) + v4_t*cos(8*phi)*sin(8*c)/(8*c) 
 	
     v4R = num2/den
 	
-    #B = B*den
+    BR = B*den*c*2/np.pi
 
-    return B*(1 + v2R*v2_assoc*np.cos(2*np.pi*x) + V3*np.cos(3*np.pi*x) + v4R*v4_assoc*np.cos(4*np.pi*x) )
+    return 10000*BR*(1 + 2*v2R*v2_a*np.cos(2*np.pi*x) + 2*V3*np.cos(3*np.pi*x) + 2*v4R*v4_a*np.cos(4*np.pi*x))
 
-def MyCHI(B, v2_trig, v2_assoc, V3, v4_trig, v4_assoc):
+def MyCHI(B, v2_t, v2_a, V3, v4_t, v4_a):
 
     total_chi2 = 0
     phi_s = {}
@@ -282,13 +294,20 @@ def MyCHI(B, v2_trig, v2_assoc, V3, v4_trig, v4_assoc):
     c["Midplane"] = np.pi/12.0
     c["Outplane"] = np.pi/6.0
     for key in data.keys():
-        if key=="Midplane": continue
-        x = data["Inplane"]["x_center"]
-        y = data["Inplane"]["y"]
+        #if key=="Midplane": continue
+        x = data[key]["x_center"]
+        y = data[key]["y"]
+        params = {}
+        params["B"] = B
+        params["v2_t"] = v2_t
+        params["v2_a"] = v2_a
+        params["V3"]   = V3
+        params["v4_t"] = v4_t
+        params["v4_a"] = v4_a
+  
         
-        model = func( x , B, v2_trig, v2_assoc, V3, v4_trig, v4_assoc, phi_s[key], c[key] )
        
-        total_chi2 = total_chi2+ np.sum( np.power( y - model  , 2.0))
+        total_chi2 = total_chi2+ np.sum( np.power( y - func( x , params, phi_s[key], c[key] )  , 2.0))
     return total_chi2
 
 #m = Minuit(MyCHI, a=0.8, b=0.8, limit_a=(-1,3), limit_b=(-1,5))
@@ -296,31 +315,71 @@ def MyCHI(B, v2_trig, v2_assoc, V3, v4_trig, v4_assoc):
 
 print 'About to start MINUIT ' 
 
-m = Minuit(MyCHI)
+m = Minuit(MyCHI, v2_t=0.20, limit_v2_t =(0,0.50), error_v2_t=0.01, v2_a=0.10, limit_v2_a =(0,0.50), error_v2_a=0.01,
+				  v4_t=0.05, limit_v4_t =(0,0.10), error_v4_t=0.01, v4_a=0.05, limit_v4_a =(0,0.10), error_v4_a=0.01,
+				  #B=2.0 , limit_B = (0, 10), error_B=0.1,
+				  V3=0 , limit_V3 = (0, 0.1), error_V3 =0.01)
 m.migrad()
-print ' values'
-print(m.values)  # {'x': 2,'y': 3,'z': 4}
-print ' errors'
-print(m.errors)  # {'x': 1,'y': 1,'z': 1}
+print ' Describe ' , describe(m)
+#m.minos()
+
+#print ' values'
+#print(m.values)  # {'x': 2,'y': 3,'z': 4}
+#print ' errors'
+#print(m.errors)  # {'x': 1,'y': 1,'z': 1}
+
+#print('covariance', m.covariance)
+#print('matrix()', m.matrix()) #covariance
+#print('matrix(correlation=True)', m.matrix(correlation=True)) #correlation
+m.print_matrix() #correlation
 
 
 
-f, (ax1, ax2, ax3, ax4, ax5, ax6) = plt.subplots(1,6, sharex=True, sharey=True)
-ax1.plot(data["Inplane"]["x_center"],  data["Inplane"]["y"], '-o')
-ax2.plot(data["Midplane"]["x_center"], data["Midplane"]["y"], '-o')
-ax3.plot(data["Outplane"]["x_center"], data["Outplane"]["y"], '-o')
 
-pre1 = func(data["Inplane"]["x_center"], m.values["B"], m.values["v2_trig"], m.values["v2_assoc"], m.values["V3"], 
-	m.values["v4_trig"], m.values["v4_assoc"], 0, np.pi/6.0) 
-pre2 = func(data["Midplane"]["x_center"], m.values["B"], m.values["v2_trig"], m.values["v2_assoc"], m.values["V3"], 
-	m.values["v4_trig"], m.values["v4_assoc"], 	np.pi/4.0, np.pi/12.0)
-pre3 = func(data["Outplane"]["x_center"], m.values["B"], m.values["v2_trig"], m.values["v2_assoc"], m.values["V3"],
-	m.values["v4_trig"], m.values["v4_assoc"], np.pi/2.0, np.pi/6.0)
+#m.draw_profile('B');
+m.draw_profile('v2_t');
+#m.draw_profile('v2_assoc');
+#m.draw_profile('V3');
+#m.draw_profile('v4_trig');
+#m.draw_profile('v4_assoc');
 
-ax4.plot(data["Inplane"]["x_center"],  pre1, '-')
-ax5.plot(data["Midplane"]["x_center"],  pre2, '-')
-ax6.plot(data["Outplane"]["x_center"],  pre3, '-')
 
+phi_s = {}
+phi_s["Inplane"]  = 0
+phi_s["Midplane"] =np.pi/4.0
+phi_s["Outplane"] = np.pi/2.0
+c  = {}
+c["Inplane"]  = np.pi/6.0 
+c["Midplane"] = np.pi/12.0
+c["Outplane"] = np.pi/6.0
+
+
+def plotresults():
+    axes = {}
+	
+    f, (axes["Inplane"], axes["Midplane"], axes["Outplane"]) = plt.subplots(1,3, sharex=True)#, sharey=True)
+	
+    for key in data.keys():
+		x = data[key]["x_center"]
+		y = data[key]["y"]
+		dy = data[key]["dy"]
+		axes[key].errorbar(x,y,yerr=dy, fmt='o')
+		model = func(x, m.values, phi_s[key], c[key])
+		axes[key].plot(x, model,'-r')
+
+    #pre1 = func(data["Inplane"]["x_center"], m.values["B"], m.values["v2_t"], m.values["v2_a"], m.values["V3"], 
+#		m.values["v4_t"], m.values["v4_a"],  0, np.pi/6.0) 
+#	pre2 = func(data["Midplane"]["x_center"], m.values["B"], m.values["v2_t"], m.values["v2_a"], m.values["V3"], 
+#		m.values["v4_t"], m.values["v4_a"],	np.pi/4.0, np.pi/12.0)
+#	pre3 = func(data["Outplane"]["x_center"], m.values["B"], m.values["v2_t"], m.values["v2_a"], m.values["V3"],
+#		m.values["v4_t"], m.values["v4_a"],  np.pi/2.0, np.pi/6.0)
+
+#	ax1.plot(data["Inplane"]["x_center"],  pre1, '-r')
+#	ax2.plot(data["Midplane"]["x_center"],  pre2, '-r')
+#	ax3.plot(data["Outplane"]["x_center"],  pre3, '-r')
+    plt.show()
+
+plotresults()
 
 #for key_planes in llaves_plane:
 #  h = FromTH1toArray(histo["dphi"]["All"]["LowEta"][key_planes])
@@ -329,4 +388,4 @@ ax6.plot(data["Outplane"]["x_center"],  pre3, '-')
 
 #plt.plot(datos["All"]["LowEta"]["x_center"], datos["All"]["LowEta"]["y"], '-ro')
 #plt.plot(datos["All"]["LargeEta"]["x_center"], datos["All"]["LargeEta"]["y"], '-ro')
-plt.show()
+#plt.show()

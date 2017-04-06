@@ -9,6 +9,7 @@
 #include "TMath.h"
 #include "TVector2.h"
 
+#include "THnSparse.h"
 #include <vector>
 #include <iostream>
 #include <fstream>
@@ -16,6 +17,11 @@
 using namespace std;
 
 
+THnSparseD* h;
+THnSparseD* h_trigger;
+
+TH2F* h_Correlation_Raw;
+TH2F* h_Correlation_Corrected;
 void SubtractPedestal(TH1F &h1){
 
   double min = h1.GetMinimum();
@@ -27,13 +33,31 @@ void SubtractPedestal(TH1F &h1){
   return ;
 }
 
+void FillHistograms(float dphi, float deta, float phi_trigger, Bool_t signal, Double_t pT_assoc, Double_t pT_trigger){
+ //this function will fill all histograms
+  //Calculating acceptance correction.
+  double weight = 1.0;
+  weight = 2-abs(deta);
+  h_Correlation_Raw->Fill(dphi,deta);
+  h_Correlation_Corrected->Fill(dphi,deta,1.0/weight);
+  Double_t temp = 0.0; //background
+  if(signal) temp=1.0; //signal
+
+  phi_trigger = abs(phi_trigger)/TMath::Pi();
+  if(phi_trigger>0.5) phi_trigger = 1-phi_trigger;
+
+  Double_t entries[6] = {dphi, abs(deta), phi_trigger, temp, pT_assoc, pT_trigger};
+  h->Fill( entries, 1.0/weight);
+  return;
+}
+
+
 void Analysis(){
 
   std::cout<<"Starting Analysis" << std::endl;
-  gStyle->SetOptStat("");
-
+  
   //auto myFile = TFile::Open("MC_DATA/Cen010_1kevents.root ","READ");
-  auto myFile = TFile::Open("MC_DATA/Cen3040_30kevents.root","READ");
+  auto myFile = TFile::Open("MC_DATA/Cen3040_10kevents_2.root","READ");
 
   if (!myFile || myFile->IsZombie()) {
     return;
@@ -67,34 +91,49 @@ void Analysis(){
   auto h_final = new TH1F("h_final", "", 2, -0.5,1.5);
   h_final->SetTitle("; final ; Entries");
 
-  double eta_max = 1.9; //maximum dEta
-  double phi_min = -0.5; // rads
-  double phi_max = 1.5; // rads
-  double n_etabins = 40;
-  double n_phibins = 40;
+  Float_t eta_max = 2.0; //maximum dEta
+  Float_t phi_min = -0.5; // rads
+  Float_t phi_max = 1.5; // rads
+  Int_t n_etabins = 20;
+  Int_t n_phibins = 25;
 
-  auto h_Correlation_Raw = new TH2F("h_Correlation_Raw","",
+  h_Correlation_Raw = new TH2F("h_Correlation_Raw","",
 				n_phibins, phi_min, phi_max,
-				n_etabins,-eta_max,eta_max);
-  //These are corrected.
-  auto h_Correlation_All = new TH2F("h_Correlation_All","", 
-				     n_phibins, phi_min, phi_max,
-				     n_etabins,-eta_max,eta_max);
-  auto h_Correlation_Signal = new TH2F("h_Correlation_Signal","",
-				       n_phibins, phi_min, phi_max,
-				       n_etabins,-eta_max,eta_max);
+				n_etabins,-1.9,1.9);
 
-  auto h_Correlation_Background = new TH2F("h_Correlation_Background","",
-                                       n_phibins, phi_min, phi_max,
-                                       n_etabins,-eta_max,eta_max);
-  //projections:
-  auto h_1D_phi_All = new TH1F("h_1D_phi_All", "", 25, phi_min, phi_max); //units of pi
-  auto h_1D_phi_Signal = new TH1F("h_1D_phi_Signal", "", 25, phi_min, phi_max); //units of pi
-  auto h_1D_phi_Background = new TH1F("h_1D_phi_Background", "", 25, phi_min, phi_max); //units of pi
+  h_Correlation_Corrected = new TH2F("h_Correlation_Corrected","",
+			       n_phibins, phi_min, phi_max,
+			       n_etabins,-1.9,1.9);
 
-  auto h_1D_phi_LargeEta_All = new TH1F("h_1D_phi_LargeEta_All", "", 25, phi_min, phi_max); //units of pi
-  auto h_1D_phi_LargeEta_Signal = new TH1F("h_1D_phi_LargeEta_Signal", "", 25, phi_min, phi_max); //units of pi
-  auto h_1D_phi_LargeEta_Background = new TH1F("h_1D_phi_LargeEta_Background", "", 25, phi_min, phi_max); //units of pi
+  h_Correlation_Raw->SetTitle("; #Delta#phi ; #Delta#eta");
+  h_Correlation_Corrected->SetTitle("; #Delta#phi ; #Delta#eta");
+
+
+  //axes are Dphi, Deta, trigger_phi, signal/background, pt_assoc
+
+  Float_t min_pTassoc =0;
+  Float_t max_pTassoc =10;
+  Int_t   n_bins_pTassoc = 20;
+ 
+  Float_t min_pTtrigger =0;
+  Float_t max_pTtrigger =20;
+  Int_t   n_bins_pTtrigger = 20;
+
+  Float_t min_trigphi = 0;
+  Float_t max_trigphi = 0.5; // phi/2
+  Int_t n_bins_trigphi = 3;
+
+  Int_t bins[6]    = {n_phibins, n_etabins, n_bins_trigphi, 2,     n_bins_pTassoc,  n_bins_pTtrigger };
+  Double_t xmin[6] = {phi_min,   0,         min_trigphi   ,  -0.5, min_pTassoc,     min_pTtrigger };
+  Double_t xmax[6] = {phi_max,   eta_max,   max_trigphi   , 1.5,   max_pTassoc,     max_pTtrigger};
+  h = new THnSparseD("h"," h ; #Delta#varphi; #Delta#eta; a; pT_assoc; pT_trigger",6,bins,xmin,xmax);
+ 
+  //axes are trig_pT, trig_phi; signal or not 
+  Int_t bins_trig[2]    = {n_bins_pTtrigger, n_bins_trigphi};
+  Double_t xmin_trig[2] = {min_pTtrigger,    min_trigphi};
+  Double_t xmax_trig[2] = {max_pTtrigger,    max_trigphi};
+
+  h_trigger = new THnSparseD("h_trigger", "#pT; #phi",2,bins_trig,xmin_trig,xmax_trig); 
   
   //Reader 
   TTreeReader myReader(tout);
@@ -113,15 +152,11 @@ void Analysis(){
   int nevent = 0;
   
   while (myReader.Next()) {
-    //    std::cout<< " NTot" << *Ntot << " Npart " << *Npart << " Nbcol " << *Nbcol << std::endl;
     nevent +=1;
     if(nevent%1000==0) std::cout << " Event # " << nevent << std::endl;
-    // if (nevent>100) break;
     h_Npart->Fill(*Npart);
     h_Nbcol->Fill(*Nbcol);
 
-    // std::cout << Pt->size() << " " << Eta->size() << " " << Phi->size () << std::endl;
-    //       std::cout << final->size() << " " << tipo->size() << " " << pythiaStatus->size() << std::endl;
     for(int i = 0; i<Pt->size(); i++){
       // std::cout << Eta->at(i) << std::endl;
       if(abs(Eta->at(i))>1.0) continue;
@@ -142,66 +177,55 @@ void Analysis(){
   while (myReader.Next()) {
     nevent +=1;
     if(nevent%500==0) std::cout << " Event # " << nevent << std::endl;
+    if(nevent>1000) break;
     for(int i = 0; i<Pt->size(); i++){
       if( abs(pdg->at(i))!=211 and abs(pdg->at(i))!=321 and abs(pdg->at(i))!=2212) continue; //select only pions, kaons and protons. 
       if(final->at(i)==0) continue; //skip if not final state
-      if(Pt->at(i)>5.0 and Pt->at(i)<10.0 and abs(Eta->at(i))<1.0 ) {
+      if(Pt->at(i)>3.0 and abs(Eta->at(i))<1.0){
+
         double trigger_phi =Phi->at(i);
         double trigger_eta =Eta->at(i);
+
+	double phi_trigger = abs(trigger_phi)/TMath::Pi();
+	if(phi_trigger>0.5) phi_trigger = 1-phi_trigger;
+
+	double pt_trigger = Pt->at(i);
 	//looping over associated particle
+	double entries[2] = {pt_trigger, phi_trigger};
+	h_trigger->Fill(entries);
+
         for(int j=0; j<Pt->size(); j++){
 	  if( abs(pdg->at(j))!=211 and abs(pdg->at(j))!=321 and abs(pdg->at(j))!=2212) continue; //select only pions kaons and protons
 	  if(final->at(j)==0) continue; //skip if not final state
-          if(Pt->at(j)>1.0 and Pt->at(j)<2.0 and abs(Eta->at(j))<1.0 ){
-            double assoc_phi = Phi->at(j);
+	  if(abs(Eta->at(j))<1.0){
+	    double assoc_phi = Phi->at(j);
             double assoc_eta = Eta->at(j);
             double dphi = TVector2::Phi_mpi_pi(trigger_phi-assoc_phi);
             double deta = trigger_eta-assoc_eta;
-	    double weight =1;
 	    if(abs(deta)>=1.9) continue;
-	    if(deta<0) weight = 2+deta;
-	    else weight = 2-deta;
 	    dphi = dphi/TMath::Pi();
             if(dphi<-0.5) dphi +=2;
-	    //fprintf (fData, "%f \n", dphi);	    
 
             //Filling histograms
-	    h_Correlation_Raw->Fill(dphi,deta);
-            h_Correlation_All->Fill(dphi,deta, 1.0/weight);
+            Bool_t signal = kFALSE;
+	    if(type->at(i)>0 and type->at(j)>0) signal = kTRUE;
 	    
-	    if(type->at(i)>0 and type->at(j)>0) h_Correlation_Signal->Fill(dphi,deta, 1.0/weight);
-	    else if(type->at(i)==0 or type->at(j)==0) h_Correlation_Background->Fill(dphi,deta,1.0/weight);
-	    //projecting into eta<0.5 (maybe this can be done in other place).
-	    if(abs(deta)<0.5){
-                h_1D_phi_All->Fill(dphi, 1.0/weight);
-		if(type->at(i)>0 and type->at(j)>0) h_1D_phi_Signal->Fill(dphi, 1.0/weight);
-		else if(type->at(i)==0 or type->at(j)==0) h_1D_phi_Background->Fill(dphi,1.0/weight);
-	    }
-	    else if(abs(deta)>1.0){
-	      h_1D_phi_LargeEta_All->Fill(dphi, 1.0/weight);
-	      if(type->at(i)>0 and type->at(j)>0) h_1D_phi_LargeEta_Signal->Fill(dphi, 1.0/weight);
-	      else if(type->at(i)==0 or type->at(j)==0) h_1D_phi_LargeEta_Background->Fill(dphi,1.0/weight);
-	    }
+	    double pt_assoc = Pt->at(j);
+
+            FillHistograms(dphi, deta, trigger_phi, signal, pt_assoc, pt_trigger);
+	      
 	    //else if eta is large
-         }
+	  } 
         } //finish loop over associated
       }
     }// finish loop over triggers
   } // finish loop over events
   
   auto fout = new TFile("fout_histos.root","RECREATE");
-  h_Correlation_All->Write("Correlation_All");
-  h_Correlation_Signal->Write("Correlation_Signal");
-  h_Correlation_Background->Write("Correlation_Background");
-
   h_Correlation_Raw->Write("Correlation_Raw");
-  h_1D_phi_All->Write("Dphi_All");
-  h_1D_phi_Signal->Write("Dphi_Signal");
-  h_1D_phi_Background->Write("Dphi_Background");
-
-  h_1D_phi_LargeEta_All->Write("Dphi_LargeEta_All");
-  h_1D_phi_LargeEta_Signal->Write("Dphi_LargeEta_Signal");
-  h_1D_phi_LargeEta_Background->Write("Dphi_LargeEta_Background");
+  h_Correlation_Corrected->Write("Correlation_Corrected");
+  h->Write("Sparse");
+  h_trigger->Write("Sparse_trigger");
   
   fout->Close();
   return;
