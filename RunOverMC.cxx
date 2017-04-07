@@ -52,7 +52,7 @@ void FillHistograms(float dphi, float deta, float phi_trigger, Bool_t signal, Do
 }
 
 
-void Analysis_2(){
+void RunOverMC(){
 
   std::cout<<"Starting Analysis" << std::endl;
   
