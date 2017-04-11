@@ -58,6 +58,9 @@ void RunOverMC(){
   
   //auto myFile = TFile::Open("MC_DATA/Cen010_1kevents.root ","READ");
   auto myFile = TFile::Open("MC_DATA/Cen3040_10kevents_2.root","READ");
+  //auto myFile = TFile::Open("MC_DATA/RunOutput_10k_Gamma.root","READ");
+  //auto myFile =  TFile::Open("MC_DATA/Gamma_5k_Baseline.root","READ");
+
 
   if (!myFile || myFile->IsZombie()) {
     return;
@@ -147,6 +150,7 @@ void RunOverMC(){
   TTreeReaderValue<std::vector<int>> type(myReader, "type");
   TTreeReaderValue<std::vector<int>> final(myReader, "final");
   TTreeReaderValue<std::vector<int>> pdg(myReader, "pdg");
+  TTreeReaderValue<std::vector<int>> Mpdg(myReader, "Mpdg");
   //looping over events
 
   int nevent = 0;
@@ -180,8 +184,10 @@ void RunOverMC(){
     if(nevent>1000) break;
     for(int i = 0; i<Pt->size(); i++){
       //if( abs(pdg->at(i))!=211 and abs(pdg->at(i))!=321 and abs(pdg->at(i))!=2212) continue; //select only pions, kaons and protons. 
-      if (pdg->at(i) != 22) continue;
-      if(final->at(i)==0) continue; //skip if not final state
+      //if (pdg->at(i) != 22) continue; //if not photon, not use
+      if(abs(pdg->at(i))!=111) continue;
+      //if (Mpdg->at(i)!=-1) continue; //if decay, not use
+      //if(final->at(i)==0) continue; //it not final state, not use
       if(Pt->at(i)>3.0 and abs(Eta->at(i))<1.0){
 
         double trigger_phi =Phi->at(i);

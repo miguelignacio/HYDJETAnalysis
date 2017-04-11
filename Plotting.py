@@ -194,53 +194,6 @@ colores = {}
 colores["All"] = 1
 colores["Signal"] = 4
 colores["Bkg"] = 2 
-def DrawHistos(histo,option=""):
-  for key_eta in llaves_eta:
-    c = ROOT.TCanvas()
-    c.Divide(4,3)
-    it = 1
-    #for key_signal in llaves_signal:
-    #key_signal = "Signal"
-    for key_signal in llaves_signal:
-      for key_plane in llaves_plane:
-        c.cd(it)
-        h = histo[key_signal][key_eta][key_plane]
-        h.Draw("hist")
-        h.SetLineColor(colores[key_signal])
-        h.SetMarkerColor(colores[key_signal])
-        h.Scale(1.0/nTriggers[key_plane])
-        it = it+1
-    c.SaveAs("SUMMARY_%s.pdf" %(key_eta))
-
-def DrawHistos2(histo,option=""):
-  for key_eta in llaves_eta:
-    c = ROOT.TCanvas()
-    c.Divide(4,2)
-    it = 1    
-    #for key_plane in llaves_plane:
-    #  c.cd(it)
-    hs = ROOT.THStack("hs","hs")
-    c.cd(it)
-    key_plane = "AllAngles"
-    histo["All"][key_eta][key_plane].Scale(1.0/nTriggers[key_plane])
-    histo["Bkg"][key_eta][key_plane].Scale(1.0/nTriggers[key_plane])
-    histo["Bkg"][key_eta][key_plane].SetFillColor(5)
-    histo["Bkg"][key_eta][key_plane].SetLineColor(4)
-    hs.Add(histo["Signal"][key_eta][key_plane])
-    hs.Add(histo["Bkg"][key_eta][key_plane])
-    
-    #h = histo[key_signal][key_eta][key_plane]
-    histo["All"][key_eta][key_plane].Draw()
-    histo["Bkg"][key_eta][key_plane].Draw("same")
-    #hs.Draw("nostack")
-    #h.SetLineColor(colores[key_signal])
-    #h.SetMarkerColor(colores[key_signal])
-    #h.Scale(1.0/nTriggers[key_plane])
-    it = it+1
-    c.SaveAs("SUMMARY_%s.pdf" %(key_eta))
-    
-
-
    
 
 #QA()
@@ -255,12 +208,14 @@ print ' COS ' , cos(0), pi
 from scipy.optimize import curve_fit
 
 
-data = {}
+fig, axs = plt.subplots(nrows=3, ncols=4, sharex=True)
 
-#data["AllAngles"] = FromTH1toArray(histo["dphi"]["Bkg"]["LargeEta"]["AllAngles"])
-data["Inplane"]   = FromTH1toArray(histo["dphi"]["Signal"]["LowEta"]["Inplane"])
-data["Midplane"]  = FromTH1toArray(histo["dphi"]["Signal"]["LowEta"]["Midplane"])
-data["Outplane"]  = FromTH1toArray(histo["dphi"]["Signal"]["LowEta"]["Outplane"])
+for j, key_signal in enumerate(llaves_signal):
+    for i, key in enumerate(llaves_plane):
+        h = FromTH1toArray(histo["dphi"][key_signal]["LowEta"][key])
+        axs[j][i].errorbar(h["x_center"], h["y"], yerr=h["dy"], fmt='o')
+
+plt.show()
 
 def func(x, params, phi , c ):
 
