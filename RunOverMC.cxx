@@ -52,15 +52,10 @@ void FillHistograms(float dphi, float deta, float phi_trigger, Bool_t signal, Do
 }
 
 
-void RunOverMC(){
+void Run(TString namefile){
 
   std::cout<<"Starting Analysis" << std::endl;
-  
-  //auto myFile = TFile::Open("MC_DATA/Cen010_1kevents.root ","READ");
-  auto myFile = TFile::Open("MC_DATA/Cen3040_10kevents_2.root","READ");
-  //auto myFile = TFile::Open("MC_DATA/RunOutput_10k_Gamma.root","READ");
-  //auto myFile =  TFile::Open("MC_DATA/Gamma_5k_Baseline.root","READ");
-
+  auto myFile =  TFile::Open("MC_DATA/"+namefile,"READ");
 
   if (!myFile || myFile->IsZombie()) {
     return;
@@ -98,7 +93,7 @@ void RunOverMC(){
   Float_t phi_min = -0.5; // rads
   Float_t phi_max = 1.5; // rads
   Int_t n_etabins = 20;
-  Int_t n_phibins = 25;
+  Int_t n_phibins = 18;
 
   h_Correlation_Raw = new TH2F("h_Correlation_Raw","",
 				n_phibins, phi_min, phi_max,
@@ -180,12 +175,12 @@ void RunOverMC(){
 
   while (myReader.Next()) {
     nevent +=1;
-    if(nevent%500==0) std::cout << " Event # " << nevent << std::endl;
-    if(nevent>1000) break;
+    if(nevent%100==0) std::cout << " Event # " << nevent << std::endl;
+    //if(nevent>1000) break;
     for(int i = 0; i<Pt->size(); i++){
       //if( abs(pdg->at(i))!=211 and abs(pdg->at(i))!=321 and abs(pdg->at(i))!=2212) continue; //select only pions, kaons and protons. 
       //if (pdg->at(i) != 22) continue; //if not photon, not use
-      if(abs(pdg->at(i))!=111) continue;
+      if(abs(pdg->at(i))!=111 and abs(pdg->at(i))!=211) continue;
       //if (Mpdg->at(i)!=-1) continue; //if decay, not use
       //if(final->at(i)==0) continue; //it not final state, not use
       if(Pt->at(i)>3.0 and abs(Eta->at(i))<1.0){
@@ -228,12 +223,23 @@ void RunOverMC(){
     }// finish loop over triggers
   } // finish loop over events
   
-  auto fout = new TFile("fout_histos.root","RECREATE");
+  auto fout = new TFile("ROOTFILES/fout_"+namefile,"RECREATE");
   h_Correlation_Raw->Write("Correlation_Raw");
   h_Correlation_Corrected->Write("Correlation_Corrected");
   h->Write("Sparse");
   h_trigger->Write("Sparse_trigger");
   
   fout->Close();
+  return;
+}
+
+
+void RunOverMC(){
+  // Run("Cen3040_40k_Baseline.root");
+  Run("Cen3040_20k_Baseline.root");
+  //Run("Cen3040_10k_baseline.root");
+  // Run("Cen3040_5k_quenched.root");
+  //Run("Cen020_2k_Baseline.root");
+  //Run("Cen020_2k_Quenched.root");
   return;
 }
